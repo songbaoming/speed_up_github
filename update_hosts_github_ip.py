@@ -26,14 +26,18 @@ DOMAIN_NAME = [
     "githubstatus.com", "github.community", "media.githubusercontent.com"
 ]
 
-IPADDRESS_URL = ".ipaddress.com"
+IPADDRESS_URL = "https://www.ipaddress.com/ip-lookup"
+HEADERS = {
+    "User-Agent":
+    "Mozilla/5.0 (Windows NT 6.1; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/89.0.4389.114 Safari/537.36"
+}
 
 HOSTS_BEGIN = "# GitHub Host Begin"
 HOSTS_END = "# GitHub Host End"
 HOSTS_TEMPLATE = """{}{}
 {}\n"""
 
-HOSTS_PATH_WIN = r"C:\Windows\System32\drivers\etc\hosts"
+HOSTS_PATH_WIN = "C:\\Windows\\System32\\drivers\\etc\\hosts"
 HOSTS_PATH_LINUX = "/etc/hosts"
 
 
@@ -59,33 +63,27 @@ def write_hosts_file(hosts_content: str):
             f.write(old_content[end_pos + len(HOSTS_END) + 1:len(old_content)])
 
 
-def make_ipaddress_url(domain: str):
-    dot_count = domain.count(".")
-    if dot_count > 1:
-        domain_list = domain.split(".")
-        main_domain = domain_list[-2] + "." + domain_list[-1]
-        ipaddress_url = "https://" + main_domain + IPADDRESS_URL + "/" + domain
-    else:
-        ipaddress_url = "https://" + domain + IPADDRESS_URL
-    return ipaddress_url
-
-
 @retry(tries=3)
 def get_ip(session: requests.session, domain: str):
-    url = make_ipaddress_url(domain)
+    payload = {"host": domain}
     try:
-        res = session.get(url, timeout=5)
+        res = session.post(IPADDRESS_URL,
+                           headers=HEADERS,
+                           data=payload,
+                           timeout=5)
         html = res.text
-        index = html.find("</header>")
-        if index != -1:
-            html = html[index:len(html)]
+        begin = html.find("<main>")
+        end = html.find("</main>")
+        if begin == -1 or end == -1:
+            raise Exception("ip address is empty!")
+        html = html[begin:end]
         pattern = r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b"
         ip_list = re.findall(pattern, html)
         if len(ip_list) != 0:
             return list(set(ip_list))
         raise Exception("ip address is empty!")
     except Exception as ex:
-        print("get: {}, error: {}".format(url, ex))
+        print("get: {}, error: {}".format(domain, ex))
         raise
 
 
